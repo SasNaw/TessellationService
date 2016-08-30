@@ -23,7 +23,9 @@ OUTPUT = None
 def read_json(path):
     try:
         with open(path, 'r') as file:
-            return json.loads(file.read())
+            str = (file.read())
+            data = json.loads(str.decode('utf-8'))
+            return data
     except IOError:
         print('Could not load saved annotations from ' + path)
 
@@ -90,7 +92,11 @@ def extract_image_from_region(slide, slide_name, region, dzi):
         dest = region['name']
     if not os.path.exists(dest):
         os.makedirs(dest)
-    image.save(dest + '/' + slide_name + '_' + str(region['uid']), 'jpeg')
+    name = dest + '/' + slide_name + '_' + str(region['uid'])
+    image.save(name, 'jpeg')
+    with open(name + '.context', 'w+') as file:
+        data = json.dumps(region.get('context'), ensure_ascii=False)
+        file.write(data.encode('utf-8'))
 
 
 def extract_regions(file):

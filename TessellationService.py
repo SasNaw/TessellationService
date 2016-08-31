@@ -3,7 +3,7 @@
 
 # TODO delete this:
 # /home/sawn/Studium/Master/microservices/TessellationService/TessellationService.py
-# -r 200 200 -f -o /home/sawn/Studium/Master/microservices/TessellationService/test /home/sawn/Studium/Master/microservices/TessellationService/img/CMU-1.svs
+# -o /home/sawn/Studium/Master/microservices/TessellationService/test /home/sawn/Studium/Master/microservices/TessellationService/img/CMU-1.svs
 
 from openslide import OpenSlide
 from PIL import Image
@@ -240,39 +240,34 @@ def regions_from_file(file):
 
 
 def run(input):
-    # input is folder:
-    if(os.path.isdir(input)):
-        files_from_dir(input)
-    # input is file:
-    elif(os.path.isfile(input)):
-        regions_from_file(input)
-    # TODO: list
-    else:
-        print("ERROR: " + input + " not found!")
+    for element in input:
+        # input is folder:
+        if(os.path.isdir(element)):
+            files_from_dir(element)
+        # input is file:
+        elif(os.path.isfile(element)):
+            regions_from_file(element)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("input", help="Either a single file, a list of files or a folder")
-    parser.add_argument("-o", "--output", help="directory to store extracted images")
-    parser.add_argument("-r", "--resize", help="resize all extracted images to provided width, height in pixel", type=int, nargs=2)
-    parser.add_argument("-t", "--tessellate", help="blub", type=int)
+    parser.add_argument("input", help="[file] or [directory], can also be a list of both", nargs='*')
+    parser.add_argument("-o", "--output", help="directory to store extracted images", metavar='[directory]')
+    parser.add_argument("-r", "--resize", help="extracted images have a size of [width] x [height] pixel", type=int, nargs=2, metavar=('[width]', '[height]'))
+    parser.add_argument("-t", "--tessellate", help="regions are approximated with tiles with a size of [width] x [height] pixel", type=int, nargs=2, metavar=('[width]', '[height]'))
     parser.add_argument("-f", "--force-overwrite", help="overwrite images with the same name [False]", action="store_true")
 
     args = parser.parse_args()
 
-    if(args.resize and args.tessellate):
-        print("Only one of -r, -t can be chosen at the same time")
-    else:
-        FORCE = args.force_overwrite
-        RESIZE = args.resize
-        OUTPUT = args.output
-        if(args.output):
-            if not OUTPUT.endswith('/'):
-                OUTPUT = OUTPUT + '/'
-            if not os.path.exists(OUTPUT):
-                os.makedirs(OUTPUT)
+    FORCE = args.force_overwrite
+    RESIZE = args.resize
+    OUTPUT = args.output
+    if(args.output):
+        if not OUTPUT.endswith('/'):
+            OUTPUT = OUTPUT + '/'
+        if not os.path.exists(OUTPUT):
+            os.makedirs(OUTPUT)
 
-        run(args.input)
+    run(args.input)
 
 

@@ -3,7 +3,7 @@
 
 # TODO delete this:
 # /home/sawn/Studium/Master/microservices/TessellationService/TessellationService.py
-#
+# -o /home/sawn/Studium/Master/microservices/TessellationService/test /home/sawn/Studium/Master/microservices/TessellationService/img/CMU-1.svs
 
 from openslide import OpenSlide
 from PIL import Image
@@ -18,6 +18,8 @@ PATH = ''
 TILE_SIZE = 256
 global OUTPUT
 OUTPUT = None
+global FORCE
+FORCE = False
 
 
 def read_json(path):
@@ -93,6 +95,9 @@ def extract_image_from_region(slide, slide_name, region, dzi):
     if not os.path.exists(dest):
         os.makedirs(dest)
     name = dest + '/' + slide_name + '_' + str(region['uid'])
+    if not FORCE:
+        while os.path.isfile(name):
+            name = name + "_copy"
     image.save(name, 'jpeg')
     with open(name + '.context', 'w+') as file:
         data = json.dumps(region.get('context'), ensure_ascii=False)
@@ -155,6 +160,7 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--output", help="directory to store extracted images")
     parser.add_argument("-r", "--resize", help="resize all extracted images to provided value", type=int)
     parser.add_argument("-t", "--tessellate", help="blub", type=int)
+    parser.add_argument("-f", "--force-overwrite", help="overwrite images with the same name [False]", action="store_true")
 
 
     args = parser.parse_args()
@@ -162,6 +168,7 @@ if __name__ == '__main__':
     if(args.resize and args.tessellate):
         print("Only one of -r, -t can be chosen at the same time")
     else:
+        FORCE = args.force_overwrite
         if(args.output):
             OUTPUT = args.output
             if not OUTPUT.endswith('/'):

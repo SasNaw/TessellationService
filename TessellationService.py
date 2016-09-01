@@ -63,30 +63,6 @@ def save_image(image, region, slide_name, *tiles):
         file.write(data.encode('utf-8'))
 
 
-# ======================================   DZI   ======================================
-
-
-# ======================================   WSI   ======================================
-
-def is_suppoted(file):
-    ext = (file.split('.'))[-1]
-    if(
-        'bif' in ext or
-        'mrxs' in ext or
-        'npdi' in ext or
-        'scn' in ext or
-        'svs' in ext or
-        'svslide' in ext or
-        'tif' in ext or
-        'tiff' in ext or
-        'vms' in ext or
-        'vmu' in ext
-    ):
-        return 1
-    else:
-        return 0
-
-
 def get_bounding_box(region):
     x_min = sys.float_info.max
     x_max = sys.float_info.min
@@ -190,25 +166,25 @@ def scale_bounding_box(bounding_box, scale):
     return bounding_box
 
 
-def tessellate_wsi(slide, slide_name, region):
-    n,m = slide.dimensions
+# ======================================   DZI   ======================================
+
+def tessellate_dzi(dzi, slide_name, region):
+    bounding_box = get_bounding_box(region)
+    tile_image = get_tiles_from_bounding_box(dzi, bounding_box)
+
+    offset_x = bounding_box['x_min']
+    offset_y = bounding_box['y_min']
+
+    n,m = tile_image.size
+
     m = m / TESSELLATE[HEIGHT]
     n = n / TESSELLATE[WIDTH]
 
-    if SHOW:
-        ox = 999999
-        oy = 999999
-
-    mtrx = np.zeros((m, n))
+    mtrx = np.zeros((m,n))
     for coords in region.get('imgCoords'):
-        i = int(coords.get('y') / TESSELLATE[HEIGHT])
-        j = int(coords.get('x') / TESSELLATE[WIDTH])
+        i = int((coords.get('y') - offset_y) / TESSELLATE[HEIGHT])
+        j = int((coords.get('x') - offset_x) / TESSELLATE[WIDTH])
         mtrx[i,j] = 1
-        if SHOW:
-            if(coords.get('y') < oy):
-                oy = coords.get('y')
-            if(coords.get('x') < ox):
-                ox = coords.get('x')
 
     lst = []
     for i in xrange(0, m):
@@ -221,37 +197,20 @@ def tessellate_wsi(slide, slide_name, region):
     cv_ref_img = np.array(ref_img)
     cv2.drawContours(cv_ref_img, [contour], 0, (255,255,255), -1)
     if SHOW:
-        dbg_img = Image.new('RGB', (n,m))
+        dbg_img = Image.new('RGB', tile_image.size)
     for i in xrange(0, m):
         for j in xrange(0, n):
             px = cv_ref_img[i,j]
             if (px == [255, 255, 255]).all():
-                location = ((j) * TESSELLATE[WIDTH], (i) * TESSELLATE[HEIGHT])
-                size = TESSELLATE
-                tile = slide.read_region(location, 0, size)
+                tile = tile_image.crop((j * TESSELLATE[WIDTH] + (bounding_box['x_min'] % dzi['tile_size']),
+                                        i * TESSELLATE[HEIGHT] + (bounding_box['y_min'] % dzi['tile_size']),
+                                        j * TESSELLATE[WIDTH] + (bounding_box['x_min'] % dzi['tile_size']) + TESSELLATE[WIDTH],
+                                        i * TESSELLATE[HEIGHT] + (bounding_box['y_min'] % dzi['tile_size']) + TESSELLATE[HEIGHT]))
                 save_image(tile, region, slide_name, i, j)
                 if SHOW:
-                    dbg_img.paste(tile, (j * TESSELLATE[WIDTH] - int(ox), i * TESSELLATE[HEIGHT] - int(oy)))
+                    dbg_img.paste(tile, (j * TESSELLATE[WIDTH], i * TESSELLATE[HEIGHT]))
     if SHOW:
         dbg_img.show()
-
-
-# def stitch_image(bounding_box, slide):
-#
-#     # img_width = int(np.ceil((bounding_box['x_max'] - bounding_box['x_min']) / TILE_SIZE) * TILE_SIZE)
-#     # img_height = int(np.ceil((bounding_box['y_max'] - bounding_box['y_min']) / TILE_SIZE) * TILE_SIZE)
-#     # img_stitched = Image.new('RGB', (img_width, img_height), color='#ff0000')
-#     #
-#     # offset_x = int(np.ceil(bounding_box['x_min'] / TILE_SIZE) * TILE_SIZE)
-#     # offset_y = int(np.ceil(bounding_box['y_min'] / TILE_SIZE) * TILE_SIZE)
-#     #
-#     # for x in range(0, (img_width / 256)):
-#     #     for y in range(0, (img_height/ 256)):
-#     #
-#     #         tile = slide.read_region((x * TILE_SIZE + offset_x, y * TILE_SIZE + offset_y), 0, (TILE_SIZE, TILE_SIZE))
-#     #         img_stitched.paste(tile, (x*TILE_SIZE, y*TILE_SIZE))
-#
-#     return img_stitched
 
 
 def get_tile_source(file):
@@ -303,9 +262,79 @@ def dzi(file):
     regions = read_json(file + '.json')
 
     for region in regions:
-        bounding_box = get_bounding_box(region)
-        image = create_image_from_tiles(dzi, bounding_box)
-        save_image(image, region, slide_name)
+        if TESSELLATE:
+            tessellate_dzi(dzi, slide_name, region)
+        else:
+            bounding_box = get_bounding_box(region)
+            image = create_image_from_tiles(dzi, bounding_box)
+            save_image(image, region, slide_name)
+
+
+# ======================================   WSI   ======================================
+
+def is_suppoted(file):
+    ext = (file.split('.'))[-1]
+    if(
+        'bif' in ext or
+        'mrxs' in ext or
+        'npdi' in ext or
+        'scn' in ext or
+        'svs' in ext or
+        'svslide' in ext or
+        'tif' in ext or
+        'tiff' in ext or
+        'vms' in ext or
+        'vmu' in ext
+    ):
+        return 1
+    else:
+        return 0
+
+
+def tessellate_wsi(slide, slide_name, region):
+    n,m = slide.dimensions
+    m = m / TESSELLATE[HEIGHT]
+    n = n / TESSELLATE[WIDTH]
+
+    if SHOW:
+        ox = 999999
+        oy = 999999
+
+    mtrx = np.zeros((m, n))
+    for coords in region.get('imgCoords'):
+        i = int(coords.get('y') / TESSELLATE[HEIGHT])
+        j = int(coords.get('x') / TESSELLATE[WIDTH])
+        mtrx[i,j] = 1
+        if SHOW:
+            if(coords.get('y') < oy):
+                oy = coords.get('y')
+            if(coords.get('x') < ox):
+                ox = coords.get('x')
+
+    lst = []
+    for i in xrange(0, m):
+        for j in xrange(0, n):
+            if(mtrx[i,j]):
+                lst.append((j,i))
+
+    contour = np.asarray(lst)
+    ref_img = Image.new('RGB', (n,m))
+    cv_ref_img = np.array(ref_img)
+    cv2.drawContours(cv_ref_img, [contour], 0, (255,255,255), -1)
+    if SHOW:
+        dbg_img = Image.new('RGB', (n,m))
+    for i in xrange(0, m):
+        for j in xrange(0, n):
+            px = cv_ref_img[i,j]
+            if (px == [255, 255, 255]).all():
+                location = ((j) * TESSELLATE[WIDTH], (i) * TESSELLATE[HEIGHT])
+                size = TESSELLATE
+                tile = slide.read_region(location, 0, size)
+                save_image(tile, region, slide_name, i, j)
+                if SHOW:
+                    dbg_img.paste(tile, (j * TESSELLATE[WIDTH] - int(ox), i * TESSELLATE[HEIGHT] - int(oy)))
+    if SHOW:
+        dbg_img.show()
 
 
 def wsi(file):
@@ -364,10 +393,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="[file] or [directory], can also be a list of both", nargs='*')
     parser.add_argument("-o", "--output", help="directory to store extracted images", metavar='[directory]')
-    parser.add_argument("-r", "--resize", help="extracted images have a size of [width] x [height] pixel", type=int, nargs=2, metavar=('[width]', '[height]'))
-    parser.add_argument("-t", "--tessellate", help="regions are approximated with tiles with a size of [width] x [height] pixel", type=int, nargs=2, metavar=('[width]', '[height]'))
     parser.add_argument("-f", "--force-overwrite", help="overwrite images with the same name [False]", action="store_true")
     parser.add_argument("-s", "--show-tessellated-image", help="put each tessellated image together and show it (for debugging purposes)", action="store_true")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-r", "--resize", help="extracted images have a size of [width] x [height] pixel", type=int, nargs=2, metavar=('[width]', '[height]'))
+    group.add_argument("-t", "--tessellate", help="regions are approximated with tiles with a size of [width] x [height] pixel", type=int, nargs=2, metavar=('[width]', '[height]'))
 
     args = parser.parse_args()
 

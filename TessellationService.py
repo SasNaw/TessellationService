@@ -180,19 +180,14 @@ def tessellate_dzi(dzi, slide_name, region):
     m = m / TESSELLATE[HEIGHT]
     n = n / TESSELLATE[WIDTH]
 
-    mtrx = np.zeros((m,n))
+    contour = []
     for coords in region.get('imgCoords'):
-        i = int((coords.get('y') - offset_y) / TESSELLATE[HEIGHT])
-        j = int((coords.get('x') - offset_x) / TESSELLATE[WIDTH])
-        mtrx[i,j] = 1
+        x = int((coords.get('x') - offset_x) / TESSELLATE[WIDTH])
+        y = int((coords.get('y') - offset_y) / TESSELLATE[HEIGHT])
+        if [x, y] not in contour:
+            contour.append([x, y])
 
-    lst = []
-    for i in xrange(0, m):
-        for j in xrange(0, n):
-            if(mtrx[i,j]):
-                lst.append((j,i))
-
-    contour = np.asarray(lst)
+    contour = np.asarray(contour)
     ref_img = Image.new('RGB', (n,m))
     cv_ref_img = np.array(ref_img)
     cv2.drawContours(cv_ref_img, [contour], 0, (255,255,255), -1)
@@ -300,24 +295,17 @@ def tessellate_wsi(slide, slide_name, region):
         ox = 999999
         oy = 999999
 
-    mtrx = np.zeros((m, n))
+    contour = []
     for coords in region.get('imgCoords'):
-        i = int(coords.get('y') / TESSELLATE[HEIGHT])
-        j = int(coords.get('x') / TESSELLATE[WIDTH])
-        mtrx[i,j] = 1
         if SHOW:
-            if(coords.get('y') < oy):
-                oy = coords.get('y')
-            if(coords.get('x') < ox):
-                ox = coords.get('x')
+            if(coords.get('y') < oy): oy = coords.get('y')
+            if(coords.get('x') < ox): ox = coords.get('x')
+        x = int(coords.get('x') / TESSELLATE[WIDTH])
+        y = int(coords.get('y') / TESSELLATE[HEIGHT])
+        if [x, y] not in contour:
+            contour.append([x, y])
 
-    lst = []
-    for i in xrange(0, m):
-        for j in xrange(0, n):
-            if(mtrx[i,j]):
-                lst.append((j,i))
-
-    contour = np.asarray(lst)
+    contour = np.asarray(contour)
     ref_img = Image.new('RGB', (n,m))
     cv_ref_img = np.array(ref_img)
     cv2.drawContours(cv_ref_img, [contour], 0, (255,255,255), -1)

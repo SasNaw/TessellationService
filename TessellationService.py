@@ -12,9 +12,9 @@ import sys
 import numpy as np
 import os, os.path
 import argparse
+import cv2
+from matplotlib import path
 
-
-PATH = ''
 TILE_SIZE = 256
 global OUTPUT
 OUTPUT = None
@@ -22,8 +22,12 @@ global FORCE
 FORCE = False
 global RESIZE
 RESIZE = None
-RESIZE_WIDTH = 0
-RESIZE_HEIGHT = 1
+WIDTH = 0
+HEIGHT = 1
+global TESSELLATE
+TESSELLATE = None
+global SHOW
+SHOW = False
 
 
 # ======================================   UTILITY   ======================================
@@ -38,7 +42,7 @@ def read_json(path):
         print('Could not load saved annotations from ' + path)
 
 
-def save_image(image, region, slide_name):
+def save_image(image, region, slide_name, *tiles):
     if(OUTPUT):
         dest = OUTPUT + region['name']
     else:
@@ -46,6 +50,8 @@ def save_image(image, region, slide_name):
     if not os.path.exists(dest):
         os.makedirs(dest)
     name = dest + '/' + slide_name + '_' + str(region['uid'])
+    for entry in tiles:
+        name += "_" + str(entry)
     if not FORCE:
         while os.path.isfile(name):
             name = name + "_copy"
@@ -103,7 +109,7 @@ def get_bounding_box(region):
 
 
 def resize_bounding_box(bounding_box):
-    r_ratio = RESIZE[RESIZE_WIDTH] / float(RESIZE[RESIZE_HEIGHT])
+    r_ratio = RESIZE[WIDTH] / float(RESIZE[HEIGHT])
     bb_width = float(bounding_box['x_max'] - bounding_box['x_min'])
     bb_height = float(bounding_box['y_max'] - bounding_box['y_min'])
     bb_ratio = bb_width / bb_height
@@ -150,12 +156,12 @@ def resize_bounding_box(bounding_box):
 
         # check if bb is big enough
         bb_width = float(bounding_box['x_max'] - bounding_box['x_min'])
-        if bb_width < RESIZE[RESIZE_WIDTH]:
-            s = RESIZE[RESIZE_WIDTH] / bb_width
+        if bb_width < RESIZE[WIDTH]:
+            s = RESIZE[WIDTH] / bb_width
             bounding_box = scale_bounding_box(bounding_box, s)
         bb_height = float(bounding_box['y_max'] - bounding_box['y_min'])
-        if bb_height < RESIZE[RESIZE_HEIGHT]:
-            s = RESIZE[RESIZE_HEIGHT] / bb_height
+        if bb_height < RESIZE[HEIGHT]:
+            s = RESIZE[HEIGHT] / bb_height
             bounding_box = scale_bounding_box(bounding_box, s)
 
         return bounding_box
@@ -175,22 +181,68 @@ def scale_bounding_box(bounding_box, scale):
     return bounding_box
 
 
-def stitch_image(bounding_box, slide):
+def tessellate_wsi(slide, slide_name, region):
+    n,m = slide.dimensions
+    m = m / TESSELLATE[HEIGHT]
+    n = n / TESSELLATE[WIDTH]
 
-    # img_width = int(np.ceil((bounding_box['x_max'] - bounding_box['x_min']) / TILE_SIZE) * TILE_SIZE)
-    # img_height = int(np.ceil((bounding_box['y_max'] - bounding_box['y_min']) / TILE_SIZE) * TILE_SIZE)
-    # img_stitched = Image.new('RGB', (img_width, img_height), color='#ff0000')
-    #
-    # offset_x = int(np.ceil(bounding_box['x_min'] / TILE_SIZE) * TILE_SIZE)
-    # offset_y = int(np.ceil(bounding_box['y_min'] / TILE_SIZE) * TILE_SIZE)
-    #
-    # for x in range(0, (img_width / 256)):
-    #     for y in range(0, (img_height/ 256)):
-    #
-    #         tile = slide.read_region((x * TILE_SIZE + offset_x, y * TILE_SIZE + offset_y), 0, (TILE_SIZE, TILE_SIZE))
-    #         img_stitched.paste(tile, (x*TILE_SIZE, y*TILE_SIZE))
+    if SHOW:
+        ox = 999999
+        oy = 999999
 
-    return img_stitched
+    mtrx = np.zeros((m, n))
+    for coords in region.get('imgCoords'):
+        i = int(coords.get('y') / TESSELLATE[HEIGHT])
+        j = int(coords.get('x') / TESSELLATE[WIDTH])
+        mtrx[i,j] = 1
+        if SHOW:
+            if(coords.get('y') < oy):
+                oy = coords.get('y')
+            if(coords.get('x') < ox):
+                ox = coords.get('x')
+
+    lst = []
+    for i in xrange(0, m):
+        for j in xrange(0, n):
+            if(mtrx[i,j]):
+                lst.append((j,i))
+
+    contour = np.asarray(lst)
+    ref_img = Image.new('RGB', (n,m))
+    cv_ref_img = np.array(ref_img)
+    cv2.drawContours(cv_ref_img, [contour], 0, (255,255,255), -1)
+    if SHOW:
+        dbg_img = Image.new('RGB', (n,m))
+    for i in xrange(0, m):
+        for j in xrange(0, n):
+            px = cv_ref_img[i,j]
+            if (px == [255, 255, 255]).all():
+                location = ((j) * TESSELLATE[WIDTH], (i) * TESSELLATE[HEIGHT])
+                size = TESSELLATE
+                tile = slide.read_region(location, 0, size)
+                save_image(tile, region, slide_name, i, j)
+                if SHOW:
+                    dbg_img.paste(tile, (j * TESSELLATE[WIDTH] - int(ox), i * TESSELLATE[HEIGHT] - int(oy)))
+    if SHOW:
+        dbg_img.show()
+
+
+# def stitch_image(bounding_box, slide):
+#
+#     # img_width = int(np.ceil((bounding_box['x_max'] - bounding_box['x_min']) / TILE_SIZE) * TILE_SIZE)
+#     # img_height = int(np.ceil((bounding_box['y_max'] - bounding_box['y_min']) / TILE_SIZE) * TILE_SIZE)
+#     # img_stitched = Image.new('RGB', (img_width, img_height), color='#ff0000')
+#     #
+#     # offset_x = int(np.ceil(bounding_box['x_min'] / TILE_SIZE) * TILE_SIZE)
+#     # offset_y = int(np.ceil(bounding_box['y_min'] / TILE_SIZE) * TILE_SIZE)
+#     #
+#     # for x in range(0, (img_width / 256)):
+#     #     for y in range(0, (img_height/ 256)):
+#     #
+#     #         tile = slide.read_region((x * TILE_SIZE + offset_x, y * TILE_SIZE + offset_y), 0, (TILE_SIZE, TILE_SIZE))
+#     #         img_stitched.paste(tile, (x*TILE_SIZE, y*TILE_SIZE))
+#
+#     return img_stitched
 
 
 def dzi(file):
@@ -206,13 +258,16 @@ def wsi(file):
     regions = read_json(file + '.json')
 
     for region in regions:
-        bounding_box = get_bounding_box(region)
-        if(RESIZE):
-            bounding_box = resize_bounding_box(bounding_box)
-        location = (bounding_box['x_min'], bounding_box['y_min'])
-        size = (bounding_box['x_max'] - bounding_box['x_min'], bounding_box['y_max'] - bounding_box['y_min'])
-        image = slide.read_region(location, 0, size)
-        save_image(image, region, slide_name)
+        if(TESSELLATE):
+            tessellate_wsi(slide, slide_name, region)
+        else:
+            bounding_box = get_bounding_box(region)
+            if(RESIZE):
+                bounding_box = resize_bounding_box(bounding_box)
+            location = (bounding_box['x_min'], bounding_box['y_min'])
+            size = (bounding_box['x_max'] - bounding_box['x_min'], bounding_box['y_max'] - bounding_box['y_min'])
+            image = slide.read_region(location, 0, size)
+            save_image(image, region, slide_name)
 
     slide.close()
 
@@ -256,12 +311,15 @@ if __name__ == '__main__':
     parser.add_argument("-r", "--resize", help="extracted images have a size of [width] x [height] pixel", type=int, nargs=2, metavar=('[width]', '[height]'))
     parser.add_argument("-t", "--tessellate", help="regions are approximated with tiles with a size of [width] x [height] pixel", type=int, nargs=2, metavar=('[width]', '[height]'))
     parser.add_argument("-f", "--force-overwrite", help="overwrite images with the same name [False]", action="store_true")
+    parser.add_argument("-s", "--show-tessellated-image", help="put each tessellated image together and show it (for debugging purposes)", action="store_true")
 
     args = parser.parse_args()
 
     FORCE = args.force_overwrite
     RESIZE = args.resize
     OUTPUT = args.output
+    TESSELLATE = args.tessellate
+    SHOW = args.show_tessellated_image
     if(args.output):
         if not OUTPUT.endswith('/'):
             OUTPUT = OUTPUT + '/'
@@ -269,5 +327,3 @@ if __name__ == '__main__':
             os.makedirs(OUTPUT)
 
     run(args.input)
-
-

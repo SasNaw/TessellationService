@@ -13,7 +13,7 @@ import numpy as np
 import os, os.path
 import argparse
 import cv2
-from matplotlib import path
+import xml.etree.ElementTree as ET
 
 TILE_SIZE = 256
 global OUTPUT
@@ -245,11 +245,56 @@ def tessellate_wsi(slide, slide_name, region):
 #     return img_stitched
 
 
+def get_tile_source(file):
+    files_dir = file.replace('.dzi', '_files/')
+    layers = os.listdir(files_dir)
+    layers.remove('metadata.txt')
+    layers = map(int, layers)
+    return files_dir + str(max(layers)) + '/'
+
+
+def get_tiles_from_bounding_box(dzi, bounding_box):
+    x_min = bounding_box['x_min'] / dzi['tile_size']
+    x_max = bounding_box['x_max'] / dzi['tile_size']
+    y_min = bounding_box['y_min'] / dzi['tile_size']
+    y_max = bounding_box['y_max'] / dzi['tile_size']
+
+    stitch = Image.new('RGB', ((x_max-x_min+1) * dzi['tile_size'], (y_max-y_min+1) * dzi['tile_size']))
+
+    for i in range(x_min, x_max+1):
+        for j in range(y_min, y_max+1):
+            tile = Image.open(dzi['tile_source'] + str(i) + '_' + str(j) + '.' + dzi['format'])
+            stitch.paste(tile, ((i - x_min) * dzi['tile_size'], (j - y_min) * dzi['tile_size']))
+    stitch.save("/home/sawn/Studium/Master/microservices/TessellationService/collected", "jpeg")
+    return stitch
+
+
+def create_image_from_tiles(dzi, bounding_box):
+    tile_image = get_tiles_from_bounding_box(dzi, bounding_box)
+    offset_x = bounding_box['x_min'] / dzi['tile_size']
+    offset_y = bounding_box['y_min'] / dzi['tile_size']
+
+    x_min = bounding_box['x_min'] - (offset_x * dzi['tile_size'])
+    x_max = bounding_box['x_max'] - (offset_x * dzi['tile_size'])
+    y_min = bounding_box['y_min'] - (offset_y * dzi['tile_size'])
+    y_max = bounding_box['y_max'] - (offset_y * dzi['tile_size'])
+
+    return tile_image.crop((x_min, y_min, x_max, y_max))
+
+
 def dzi(file):
+    slide_name = file.split('/')[-1]
+    with open(file, 'r') as dzi_file:
+        content = dzi_file.read()
+    root = ET.fromstring(content)
+    dzi = {'tile_size': int(root.get('TileSize')), 'width': int(root[0].get('Width')),
+           'height': int(root[0].get('Height')), 'tile_source': get_tile_source(file), 'format': root.get('Format')}
     regions = read_json(file + '.json')
+
     for region in regions:
-        print("dzi")
-    return None
+        bounding_box = get_bounding_box(region)
+        image = create_image_from_tiles(dzi, bounding_box)
+        save_image(image, region, slide_name)
 
 
 def wsi(file):
@@ -280,14 +325,14 @@ def files_from_dir(dir):
     contents = os.listdir(dir)
     for content in contents:
         if os.path.isdir(dir + content):
-            if not content.endswith("_files"):
+            if not content.endswith('_files'):
                 files_from_dir(dir + content)
         else:
             regions_from_file(dir + content)
 
 
 def regions_from_file(file):
-    if file.endswith(".dzi"):
+    if file.endswith('.dzi'):
         dzi(file)
     else:
         if(is_suppoted(file)):

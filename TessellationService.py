@@ -164,6 +164,15 @@ def resize_bounding_box(bounding_box):
             s = RESIZE[HEIGHT] / bb_height
             bounding_box = scale_bounding_box(bounding_box, s)
 
+        if(bounding_box['y_min'] < 0):
+            dif = bounding_box['y_min'] * (-1)
+            bounding_box['y_min'] += dif
+            bounding_box['y_max'] += dif
+        if(bounding_box['x_min'] < 0):
+            dif = bounding_box['x_min'] * (-1)
+            bounding_box['x_min'] += dif
+            bounding_box['x_max'] += dif
+
         return bounding_box
 
 
@@ -265,19 +274,21 @@ def get_tiles_from_bounding_box(dzi, bounding_box):
         for j in range(y_min, y_max+1):
             tile = Image.open(dzi['tile_source'] + str(i) + '_' + str(j) + '.' + dzi['format'])
             stitch.paste(tile, ((i - x_min) * dzi['tile_size'], (j - y_min) * dzi['tile_size']))
-    stitch.save("/home/sawn/Studium/Master/microservices/TessellationService/collected", "jpeg")
     return stitch
 
 
 def create_image_from_tiles(dzi, bounding_box):
+    if(RESIZE):
+        bounding_box = resize_bounding_box(bounding_box)
     tile_image = get_tiles_from_bounding_box(dzi, bounding_box)
-    offset_x = bounding_box['x_min'] / dzi['tile_size']
-    offset_y = bounding_box['y_min'] / dzi['tile_size']
 
-    x_min = bounding_box['x_min'] - (offset_x * dzi['tile_size'])
-    x_max = bounding_box['x_max'] - (offset_x * dzi['tile_size'])
-    y_min = bounding_box['y_min'] - (offset_y * dzi['tile_size'])
-    y_max = bounding_box['y_max'] - (offset_y * dzi['tile_size'])
+    offset_x = bounding_box['x_min']
+    offset_y = bounding_box['y_min']
+
+    x_min = bounding_box['x_min'] - offset_x
+    x_max = bounding_box['x_max'] - offset_x
+    y_min = bounding_box['y_min'] - offset_y
+    y_max = bounding_box['y_max'] - offset_y
 
     return tile_image.crop((x_min, y_min, x_max, y_max))
 

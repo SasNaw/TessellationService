@@ -4,7 +4,7 @@ TessellationService is a python script, intended to extract annotated image regi
 It supports all image formats supported by [OpenSlide](http://openslide.org/) and additionally [Deep Zoom Images](https://msdn.microsoft.com/en-us/library/cc645077(v=vs.95).aspx).
 
 ## Installation
-    git clone https://github.com/SasNaw/AnnotationService.git
+    https://github.com/SasNaw/TessellationService.git
 
 ## Dependencies
 - Python installation of [OpenSlide](http://openslide.org/download/)

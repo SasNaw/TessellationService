@@ -18,7 +18,7 @@ When saving made annotations, the AnnotationService creates a JSON file ([image 
 	
 3 modes of extraction are supported:
 * extraction of region's bounding box in original size
-* extraction of region's bounding box scaled to a provided [width] and [height] (-r [width] [height])
+* extraction of region's bounding box scaled to a provided [width] and [height] pixels (-r [width] [height])
 * approximation of region via multiple tiles of [width] x [height] pixels (-t [width] [height])
 
 For an overview of all parameters see

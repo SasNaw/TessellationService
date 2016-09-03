@@ -28,7 +28,8 @@ global TESSELLATE
 TESSELLATE = None
 global SHOW
 SHOW = False
-
+global GRAYSCALE
+GRAYSCALE = False
 
 # ======================================   UTILITY   ======================================
 
@@ -57,6 +58,9 @@ def save_image(image, region, slide_name, *tiles):
             name = name + "_copy"
     if RESIZE:
         image = image.resize(RESIZE)
+    # L = R * 299/1000 + G * 587/1000 + B * 114/1000
+    if GRAYSCALE:
+        image = image.convert('L')
     image.save(name, 'jpeg')
     with open(name + '.context', 'w+') as file:
         data = json.dumps(region.get('context'), ensure_ascii=False)
@@ -379,12 +383,15 @@ def run(input):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("input", help="[file] or [directory], can also be a list of both", nargs='*')
-    parser.add_argument("-o", "--output", help="directory to store extracted images", metavar='[directory]')
-    parser.add_argument("-f", "--force-overwrite", help="overwrite images with the same name [False]", action="store_true")
-    parser.add_argument("-s", "--show-tessellated-image", help="put each tessellated image together and show it (for debugging purposes)", action="store_true")
     group = parser.add_mutually_exclusive_group()
+    parser.add_argument("input", help="[file] or [directory], can also be a list of both", nargs='*')
+
+    parser.add_argument("-f", "--force-overwrite", help="overwrite images with the same name [False]", action="store_true")
+    parser.add_argument("-g", "--grayscale", help="convert images to grayscale", action="store_true")
+    parser.add_argument("-i", "--interpolation", help="chose interpolation method []")
+    parser.add_argument("-o", "--output", help="directory to store extracted images", metavar='[directory]')
     group.add_argument("-r", "--resize", help="extracted images have a size of [width] x [height] pixel", type=int, nargs=2, metavar=('[width]', '[height]'))
+    parser.add_argument("-s", "--show-tessellated-image", help="put each tessellated image together and show it (for debugging purposes)", action="store_true")
     group.add_argument("-t", "--tessellate", help="regions are approximated with tiles with a size of [width] x [height] pixel", type=int, nargs=2, metavar=('[width]', '[height]'))
 
     args = parser.parse_args()
@@ -394,6 +401,7 @@ if __name__ == '__main__':
     OUTPUT = args.output
     TESSELLATE = args.tessellate
     SHOW = args.show_tessellated_image
+    GRAYSCALE = args.grayscale
     if(args.output):
         if not OUTPUT.endswith('/'):
             OUTPUT = OUTPUT + '/'

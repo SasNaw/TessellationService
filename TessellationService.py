@@ -30,6 +30,7 @@ global SHOW
 SHOW = False
 global GRAYSCALE
 GRAYSCALE = False
+global INTERPOLATION
 
 # ======================================   UTILITY   ======================================
 
@@ -57,7 +58,7 @@ def save_image(image, region, slide_name, *tiles):
         while os.path.isfile(name):
             name = name + "_copy"
     if RESIZE:
-        image = image.resize(RESIZE)
+        image = image.resize(RESIZE, INTERPOLATION)
     # L = R * 299/1000 + G * 587/1000 + B * 114/1000
     if GRAYSCALE:
         image = image.convert('L')
@@ -388,7 +389,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-f", "--force-overwrite", help="overwrite images with the same name [False]", action="store_true")
     parser.add_argument("-g", "--grayscale", help="convert images to grayscale", action="store_true")
-    parser.add_argument("-i", "--interpolation", help="chose interpolation method []")
+    parser.add_argument("-i", "--interpolation", help="chose interpolation method [nearest neighbor, bilinear, bicubic, lanczos]", choices=['nearest', 'bilinear', 'bicubic', 'lanczos'])
     parser.add_argument("-o", "--output", help="directory to store extracted images", metavar='[directory]')
     group.add_argument("-r", "--resize", help="extracted images have a size of [width] x [height] pixel", type=int, nargs=2, metavar=('[width]', '[height]'))
     parser.add_argument("-s", "--show-tessellated-image", help="put each tessellated image together and show it (for debugging purposes)", action="store_true")
@@ -401,6 +402,15 @@ if __name__ == '__main__':
     OUTPUT = args.output
     TESSELLATE = args.tessellate
     SHOW = args.show_tessellated_image
+    INTERPOLATION = args.interpolation
+    if INTERPOLATION == 'bilinear':
+        INTERPOLATION = Image.BILINEAR
+    elif INTERPOLATION == 'bicubic':
+        INTERPOLATION = Image.BICUBIC
+    elif INTERPOLATION == 'lanczos':
+        INTERPOLATION = Image.LANCZOS
+    else:
+        INTERPOLATION = Image.NEAREST
     GRAYSCALE = args.grayscale
     if(args.output):
         if not OUTPUT.endswith('/'):

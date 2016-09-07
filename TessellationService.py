@@ -16,21 +16,24 @@ import cv2
 import xml.etree.ElementTree as ET
 
 TILE_SIZE = 256
-global OUTPUT
+# global OUTPUT
 OUTPUT = None
-global FORCE
+# global FORCE
 FORCE = False
-global RESIZE
+# global RESIZE
 RESIZE = None
 WIDTH = 0
 HEIGHT = 1
-global TESSELLATE
+# global TESSELLATE
 TESSELLATE = None
-global SHOW
+# global SHOW
 SHOW = False
-global GRAYSCALE
+# global GRAYSCALE
 GRAYSCALE = False
-global INTERPOLATION
+# global INTERPOLATION
+INTERPOLATION = None
+DICTIONARY = None
+
 
 # ======================================   UTILITY   ======================================
 
@@ -63,9 +66,10 @@ def save_image(image, region, slide_name, *tiles):
     if GRAYSCALE:
         image = image.convert('L')
     image.save(name, 'jpeg')
-    with open(name + '.context', 'w+') as file:
-        data = json.dumps(region.get('context'), ensure_ascii=False)
-        file.write(data.encode('utf-8'))
+    with open(name + '.metadata.json', 'w+') as file:
+        data = {'label': region.get('name'), 'zoom': region.get('zoom'), 'context': region.get('context')}
+        content = json.dumps(data, ensure_ascii=False)
+        file.write(content.encode('utf-8'))
 
 
 def get_bounding_box(region):
@@ -333,7 +337,7 @@ def tessellate_wsi(slide, slide_name, region):
 def wsi(file):
     slide = OpenSlide(file)
     slide_name = file.split('/')[-1]
-    regions = read_json(file + '.json')
+    regions = read_json(file + '_' + DICTIONARY)
 
     for region in regions:
         if(TESSELLATE):
@@ -385,7 +389,8 @@ def run(input):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group()
-    parser.add_argument("input", help="[file] or [directory], can also be a list of both", nargs='*')
+    parser.add_argument("input", help="[file] or [directory], can also be a list of both", nargs='+')
+    parser.add_argument("dictionary", help="dictionary used for annotation")
 
     parser.add_argument("-f", "--force-overwrite", help="overwrite images with the same name [False]", action="store_true")
     parser.add_argument("-g", "--grayscale", help="convert images to grayscale", action="store_true")
@@ -397,6 +402,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    DICTIONARY = args.dictionary
+    if not DICTIONARY.endswith('.json'):
+        DICTIONARY = DICTIONARY + '.json'
     FORCE = args.force_overwrite
     RESIZE = args.resize
     OUTPUT = args.output

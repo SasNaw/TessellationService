@@ -3,7 +3,7 @@
 
 # TODO delete this:
 # /home/sawn/Studium/Master/microservices/TessellationService/TessellationService.py
-# -o /home/sawn/Studium/Master/microservices/TessellationService/test /home/sawn/Studium/Master/microservices/TessellationService/img/CMU-1.svs
+# -o /home/sawn/Studium/Master/microservices/TessellationService/test /home/sawn/Studium/Master/microservices/TessellationService/img/CMU-1.svs example
 
 from openslide import OpenSlide
 from PIL import Image
@@ -47,7 +47,28 @@ def read_json(path):
         print('Could not load saved annotations from ' + path)
 
 
-def save_image(image, region, slide_name, *tiles):
+def save_metadata(name, region, *tiles):
+    if len(tiles) > 0:
+        name = name + '_tessellated.metadata.json'
+        if not FORCE:
+            cnt = 0
+        while os.path.isfile(name):
+            cnt+=1
+            name = name + '(' + str(cnt) +')'
+    else:
+        image_name = name
+        name = name + '.metadata.json'
+    with open(name, 'w+') as file:
+        data = {'label': region.get('name'), 'zoom': region.get('zoom'), 'context': region.get('context')}
+        if len(tiles) > 0:
+            data['tiles'] = tiles
+        else:
+            data['image'] = image_name.split('/')[-1] + '.jpeg'
+        content = json.dumps(data, ensure_ascii=False)
+        file.write(content.encode('utf-8'))
+
+
+def generate_file_name(region, slide_name, *tiles):
     if(OUTPUT):
         dest = OUTPUT + region['name']
     else:
@@ -55,21 +76,31 @@ def save_image(image, region, slide_name, *tiles):
     if not os.path.exists(dest):
         os.makedirs(dest)
     name = dest + '/' + slide_name + '_' + str(region['uid'])
-    for entry in tiles:
-        name += "_" + str(entry)
+    if len(tiles) > 0:
+        for entry in tiles:
+            name += "_" + str(entry)
     if not FORCE:
+        cnt = 0
         while os.path.isfile(name):
-            name = name + "_copy"
+            cnt+=1
+            name = name + '(' + str(cnt) +')'
+    return name
+
+
+def save_image(image, region, slide_name, *tiles):
+    if len(tiles) == 0:
+        name = generate_file_name(region, slide_name)
+    else:
+        name = generate_file_name(region, slide_name, tiles)
     if RESIZE:
         image = image.resize(RESIZE, INTERPOLATION)
     # L = R * 299/1000 + G * 587/1000 + B * 114/1000
     if GRAYSCALE:
         image = image.convert('L')
     image.save(name, 'jpeg')
-    with open(name + '.metadata.json', 'w+') as file:
-        data = {'label': region.get('name'), 'zoom': region.get('zoom'), 'context': region.get('context')}
-        content = json.dumps(data, ensure_ascii=False)
-        file.write(content.encode('utf-8'))
+    if len(tiles) == 0:
+        save_metadata(name, region)
+    return name
 
 
 def get_bounding_box(region):
@@ -82,11 +113,11 @@ def get_bounding_box(region):
         y = coordinate.get('y')
         if(x >= x_max):
             x_max = x
-        elif(x < x_min) :
+        if(x < x_min) :
             x_min = x
         if(y >= y_max):
             y_max = y
-        elif(y < y_min) :
+        if(y < y_min) :
             y_min = y
 
     return {'x_max': int(np.ceil(x_max)), 'x_min': int(np.floor(x_min)),
@@ -202,6 +233,7 @@ def tessellate_dzi(dzi, slide_name, region):
     cv2.drawContours(cv_ref_img, [contour], 0, (255,255,255), -1)
     if SHOW:
         dbg_img = Image.new('RGB', tile_image.size)
+    tiles = []
     for i in xrange(0, m):
         for j in xrange(0, n):
             px = cv_ref_img[i,j]
@@ -210,11 +242,13 @@ def tessellate_dzi(dzi, slide_name, region):
                                         i * TESSELLATE[HEIGHT] + (bounding_box['y_min'] % dzi['tile_size']),
                                         j * TESSELLATE[WIDTH] + (bounding_box['x_min'] % dzi['tile_size']) + TESSELLATE[WIDTH],
                                         i * TESSELLATE[HEIGHT] + (bounding_box['y_min'] % dzi['tile_size']) + TESSELLATE[HEIGHT]))
-                save_image(tile, region, slide_name, i, j)
+                tile_name = save_image(tile, region, slide_name, i, j)
+                tiles.append(tile_name.split('/')[-1] + '.jpeg')
                 if SHOW:
                     dbg_img.paste(tile, (j * TESSELLATE[WIDTH], i * TESSELLATE[HEIGHT]))
     if SHOW:
         dbg_img.show()
+    save_metadata(generate_file_name(region, slide_name), region, tiles)
 
 
 def get_tile_source(file):
@@ -263,7 +297,7 @@ def dzi(file):
     root = ET.fromstring(content)
     dzi = {'tile_size': int(root.get('TileSize')), 'width': int(root[0].get('Width')),
            'height': int(root[0].get('Height')), 'tile_source': get_tile_source(file), 'format': root.get('Format')}
-    regions = read_json(file + '.json')
+    regions = read_json(file + '_' + DICTIONARY)
 
     for region in regions:
         if TESSELLATE:
@@ -320,6 +354,7 @@ def tessellate_wsi(slide, slide_name, region):
     cv2.drawContours(cv_ref_img, [contour], 0, (255,255,255), -1)
     if SHOW:
         dbg_img = Image.new('RGB', (n,m))
+    tiles = []
     for i in xrange(0, m):
         for j in xrange(0, n):
             px = cv_ref_img[i,j]
@@ -327,11 +362,13 @@ def tessellate_wsi(slide, slide_name, region):
                 location = ((j) * TESSELLATE[WIDTH], (i) * TESSELLATE[HEIGHT])
                 size = TESSELLATE
                 tile = slide.read_region(location, 0, size)
-                save_image(tile, region, slide_name, i, j)
+                tile_name = save_image(tile, region, slide_name, i, j)
+                tiles.append(tile_name.split('/')[-1] + '.jpeg')
                 if SHOW:
                     dbg_img.paste(tile, (j * TESSELLATE[WIDTH] - int(ox), i * TESSELLATE[HEIGHT] - int(oy)))
     if SHOW:
         dbg_img.show()
+    save_metadata(generate_file_name(region, slide_name), region, tiles)
 
 
 def wsi(file):

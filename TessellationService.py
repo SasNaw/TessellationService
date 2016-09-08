@@ -97,7 +97,7 @@ def save_image(image, region, slide_name, *tiles):
     # L = R * 299/1000 + G * 587/1000 + B * 114/1000
     if GRAYSCALE:
         image = image.convert('L')
-    image.save(name, 'jpeg')
+    image.save(name + '.jpeg', 'jpeg')
     if len(tiles) == 0:
         save_metadata(name, region)
     return name
